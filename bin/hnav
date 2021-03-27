@@ -1,0 +1,194 @@
+#!/bin/sh -e
+#L:
+#l:  Copyright (c) 2018 Openvirtus.com, http://openvirtus.com
+#L:
+#L:  Permission is hereby granted, free of charge, to any person obtaining
+#L:  a copy of this software and associated documentation files (the
+#L:  "Software"), to deal in the Software without restriction, including
+#L:  without limitation the rights to use, copy, modify, merge, publish,
+#L:  distribute, sublicense, and/or sell copies of the Software, and to
+#L:  permit persons to whom the Software is furnished to do so, subject to
+#L:  the following conditions:
+#L:
+#L:  The above copyright notice and this permission notice shall be
+#L:  included in all copies or substantial portions of the Software.
+#L:
+#L:  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+#L:  EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+#L:  MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+#L:  NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+#L:  LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+#L:  OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+#L:  WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+#L:
+#h: Usage: $0 [-atwci] URL [OPT=VAL ...]
+#h:
+#h: This program helps launching the browser.
+#h:
+#h: -a : Open in application mode.
+#h: -t : Open in tabbed mode.
+#h: -w : Open in windowed mode.
+#h: -c : Open in cookie gathering mode.
+#h: -i : Open in incognito mode.
+#h:
+#h: -f : Enforce Icecat/Firefox.
+#h: -g : Enforce Google chrome.
+#h: -s : Enforce Surf.
+hnav() {
+    ## Parse command line arguments.
+    local OPTIND optopt= ops=
+    while getopts "vatwcifgs" optopt;do # OPTARG
+        local ops="${ops}${optopt}"
+        case $optopt in
+            \?) return 1;;
+        esac
+    done
+    shift $(( $OPTIND - 1 ))
+    ## Operations.
+    case "${ops}" in *v*) hnav_show_variables; return 0;; esac
+    case "${1}" in
+        '')    hnav_open_url "${ops}" "${HNAV_HOME_PAGE}"   ;;
+        *://*) hnav_open_url "${ops}" "$@"                  ;;
+        *)     if test -f "$1";then
+                   hnav_open_url "${ops}" "$@"
+               else
+                   hnav_open_url "${ops}" "https://www.google.com/search" q="$*"
+               fi;;
+    esac    
+}
+hnav_show_variables() {
+    printf '%-30s: %s\n' HNAV_PROGS_APPS      "${HNAV_PROGS_APPS}"
+    printf '%-30s: %s\n' HNAV_PROGS_TABS      "${HNAV_PROGS_TABS}"
+    printf '%-30s: %s\n' HNAV_PROGS_WINDOWED  "${HNAV_PROGS_WINDOWED}"
+    printf '%-30s: %s\n' HNAV_PROGS_COOKIES   "${HNAV_PROGS_COOKIES}"
+    printf '%-30s: %s\n' HNAV_PROGS_INCOGNITO "${HNAV_PROGS_INCOGNITO}"
+    printf '%-30s: %s\n' HNAV_COOKIE_FILE     "${HNAV_COOKIE_FILE}"
+    printf '%-30s: %s\n' HNAV_HOME_PAGE       "${HNAV_HOME_PAGE}"
+}
+hnav_calc_variables() {
+    HNAV_PROGS_APPS=
+    HNAV_PROGS_TABS=
+    HNAV_PROGS_WINDOWED=
+    HNAV_PROGS_COOKIES=
+    HNAV_PROGS_INCOGNITO=
+    HNAV_COOKIE_FILE="${HNAV_COOKIE_FILE:-${HOME}/.cookies}"
+    HNAV_HOME_PAGE="${HNAV_HOME_PAGE:-https://www.google.com}"
+    if which surf >/dev/null 2>&1;then
+        HNAV_PROGS_APPS="${HNAV_PROGS_APPS} surf"
+        HNAV_PROGS_COOKIES="${HNAV_PROGS_COOKIES} surf"
+    fi
+    if which firefox >/dev/null 2>&1 || which icecat >/dev/null 2>&1;then
+        HNAV_PROGS_WINDOWED="${HNAV_PROGS_WINDOWED} firefox"
+        HNAV_PROGS_TABS="${HNAV_PROGS_TABS} firefox"
+    fi
+    if which google-chrome >/dev/null 2>&1;then
+        HNAV_PROGS_APPS="chrome ${HNAV_PROGS_APPS}"
+        HNAV_PROGS_WINDOWED="${HNAV_PROGS_WINDOWED} chrome"
+        HNAV_PROGS_TABS="${HNAV_PROGS_TABS} chrome"
+        HNAV_PROGS_INCOGNITO="${HNAV_PROGS_INCOGNITO} chrome"
+    fi
+}
+## --------------------------------------------------------------------------
+## --- OPEN BROWSER ---------------------------------------------------------
+## --------------------------------------------------------------------------
+hnav_open_url() { # OPS URL ARGS...
+    ## Forge URL.
+    local ops="$1" url="$2"
+    shift 2
+    if test -n "$1";then
+        local url="${url}`hnav_encode "$@"`"
+    fi
+    ## Select navigator.
+    local head= prog=""
+    case "${ops}" in
+        *a*)   local head="app" prog="${HNAV_PROGS_APPS}"     ;;
+        *w*)   local head="win" prog="${HNAV_PROGS_WINDOWED}" ;;
+        *c*)   local head="cke" prog="${HNAV_PROGS_COOKIES}"  ;;
+        *i*)   local head="inc" prog="${HNAV_PROGS_INCOGNITO}";;
+        *t*|*) local head="tab" prog="${HNAV_PROGS_TABS}"     ;;
+    esac
+    case "${ops}" in
+        *f*)   local prog="firefox";;
+        *g*)   local prog="chrome" ;;
+        *s*)   local prog="surf"   ;;
+    esac
+    ## Select program.
+    local prog="`echo "${prog}" | sed 's|^ *||;s| .*||'`"
+    if test ! -n "${prog}";then
+        xmessage -nearmouse -buttons '' -timeout 2 'error: No explorer found.'
+    fi
+    ## Execute.
+    hnav_run_"${head}"_"${prog}" "${url}" &
+}
+
+
+
+hnav_run_app_surf() { # URL
+    local url="${1}"
+    surf -D -m -n -c "${HNAV_COOKIE_FILE}" "${url}"
+}
+hnav_run_win_surf() { # URL
+    local url="${1}"
+    surf -D -m -n -c "${HNAV_COOKIE_FILE}" "${url}"
+}
+hnav_run_win_firefox() { # URL
+    local url="${1}"
+    if which icecat >/dev/null 2>&1;then
+        icecat --new-window "${url}"
+    else
+        firefox -new-window "${url}"
+    fi
+}
+hnav_run_tab_firefox() { # URL
+    local url="${1}"
+    if which icecat >/dev/null 2>&1;then
+        icecat "${url}"
+    else
+        firefox "${url}"
+    fi
+}
+hnav_run_win_badwolf() { # URL
+    local url="${1}"
+    badwolf "${url}"
+}
+hnav_run_app_chrome() { google-chrome --app="$1"        >> /tmp/chrome.log 2>&1; }
+hnav_run_win_chrome() { google-chrome --new-window "$1" >> /tmp/chrome.log 2>&1; }
+hnav_run_inc_chrome() { google-chrome --incognito "$1"  >> /tmp/chrome.log 2>&1; }
+hnav_run_tab_chrome() { google-chrome "$1"              >> /tmp/chrome.log 2>&1; }
+
+
+
+
+
+## --------------------------------------------------------------------------
+## ---- URL ENCODER ---------------------------------------------------------
+## --------------------------------------------------------------------------
+hnav_encode_raw() {
+    sed 's/ /%20/g;s/!/%21/g;s/"/%22/g;s/#/%23/g;s/\$/%24/g;s/\&/%26/g;s/'\''/%27/g;s/(/%28/g;s/)/%29/g;s/:/%3A/g'
+}
+hnav_encode() {
+    local m= a=
+    for a in "$@";do
+        local o="`echo "${a}" | sed -n 's|=.*||p'`"
+        local v="`echo "${a}" | sed -n 's|^[^=]*=||p'`"
+        if test -n "${o}" && test -n "${v}";then
+            local m="${m:-?}${m:+&}${o}=`echo -n "${v}" | hnav_encode_raw`"
+        fi
+    done
+    echo "${m}"
+}
+
+
+
+
+## --------------------------------------------------------------------------
+hnav_calc_variables
+if test @"`basename "$0"`" = @"hnav";then
+    if test -n "$1";then
+        hnav "$@"
+    else
+        sed -n 's/^ *#h: \{0,1\}//p' "$0" | sed "s|\\\$0|`basename $0`|g"
+        echo ""
+        sed -n 's/^ *#l: \{0,2\}//p' "$0"
+    fi
+fi
