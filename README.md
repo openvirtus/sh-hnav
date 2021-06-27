@@ -11,8 +11,10 @@
     -i : Open in incognito mode.
     
     -f : Enforce Icecat/Firefox.
+    -m : Enforce Mozilla Firefox, no other one.
     -g : Enforce Google chrome.
     -s : Enforce Surf.
+
 
 ## DONATIONS
 <ul>

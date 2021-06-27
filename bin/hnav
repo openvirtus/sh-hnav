@@ -37,13 +37,14 @@
 #h: -i : Open in incognito mode.
 #h:
 #h: -f : Enforce Icecat/Firefox.
+#h: -m : Enforce Mozilla Firefox, no other one.
 #h: -g : Enforce Google chrome.
 #h: -s : Enforce Surf.
 #r:
 hnav() {
     ## Parse command line arguments.
     local OPTIND optopt= ops=
-    while getopts "vatwcifgs" optopt;do # OPTARG
+    while getopts "vatwcifgsm" optopt;do # OPTARG
         local ops="${ops}${optopt}"
         case $optopt in
             \?) return 1;;
@@ -99,7 +100,7 @@ hnav_calc_variables() {
 ## --------------------------------------------------------------------------
 hnav_open_url() { # OPS URL ARGS...
     ## Forge URL.
-    local ops="$1" url="$2"
+    local ops="$1" url="$2" enforce_firefox=n
     shift 2
     if test -n "$1";then
         local url="${url}`hnav_encode "$@"`"
@@ -115,6 +116,7 @@ hnav_open_url() { # OPS URL ARGS...
     esac
     case "${ops}" in
         *f*)   local prog="firefox";;
+        *m*)   local prog="firefox" enforce_firefox=y;;
         *g*)   local prog="chrome" ;;
         *s*)   local prog="surf"   ;;
     esac
@@ -139,7 +141,7 @@ hnav_run_win_surf() { # URL
 }
 hnav_run_win_firefox() { # URL
     local url="${1}"
-    if which icecat >/dev/null 2>&1;then
+    if which icecat >/dev/null 2>&1 && test ! @"${enforce_firefox}" = @"y";then
         icecat --new-window "${url}"
     else
         firefox -new-window "${url}"
@@ -147,7 +149,7 @@ hnav_run_win_firefox() { # URL
 }
 hnav_run_tab_firefox() { # URL
     local url="${1}"
-    if which icecat >/dev/null 2>&1;then
+    if which icecat >/dev/null 2>&1 && test ! @"${enforce_firefox}" = @"y";then
         icecat "${url}"
     else
         firefox "${url}"
